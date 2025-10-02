@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "backend/api/**/*.js": {
+      "memory": 1024
+    }
+  }
+}
