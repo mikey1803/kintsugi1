@@ -26,6 +26,8 @@ const MindfulActivitiesScreen = () => {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [pulseAnim] = useState(new Animated.Value(1));
+  const [completedActivities, setCompletedActivities] = useState(new Set());
+  const [gamificationKey, setGamificationKey] = useState(0);
 
   const moods = [
     { id: 'good', label: 'Good', emoji: '😊', color: '#4CAF50' },
@@ -179,31 +181,37 @@ const MindfulActivitiesScreen = () => {
     if (activity.id === 'breathing-exercise') {
       startBreathingAnimation();
     }
+    // Points will be awarded on completion, not on selection
+  };
+
+  const awardActivityPoints = async (activityId, pointType) => {
+    // Create unique key for this activity instance
+    const activityKey = `${activityId}_${Date.now()}`;
     
-    // Award points for starting activity
-    const pointTypes = {
-      'breathing-exercise': 'BREATHING_EXERCISE',
-      'grounding-activity': 'GROUNDING_EXERCISE',
-      'mindfulness-timer': 'MINDFULNESS_TIMER',
-      'focus-puzzle': 'FOCUS_PUZZLE',
-      'uplifting-music': 'MUSIC_ACTIVITY',
-      'guided-relaxation': 'RELAXATION_EXERCISE',
-      'visualization': 'VISUALIZATION',
-      'motivational-quiz': 'MOTIVATIONAL_QUIZ',
-    };
-    
-    const pointType = pointTypes[activity.id];
-    if (pointType) {
-      setTimeout(async () => {
-        const reward = await GamificationSystem.awardPoints(pointType);
-        if (reward.pointsAwarded > 0) {
-          let message = `+${reward.pointsAwarded} points!`;
-          if (reward.newBadges && reward.newBadges.length > 0) {
-            message += `\n🏆 ${reward.newBadges[0].emoji} ${reward.newBadges[0].name}`;
-          }
-          Alert.alert('Points Earned! ⭐', message);
+    if (completedActivities.has(activityKey)) {
+      return; // Already awarded
+    }
+
+    try {
+      const reward = await GamificationSystem.awardPoints(pointType);
+      setCompletedActivities(prev => new Set([...prev, activityKey]));
+      setGamificationKey(prev => prev + 1); // Force widget refresh
+      
+      if (reward.pointsAwarded > 0) {
+        let message = `+${reward.pointsAwarded} points earned!`;
+        if (reward.streakBonus > 0) {
+          message += `\n🔥 +${reward.streakBonus} streak bonus!`;
         }
-      }, 2000); // Award after 2 seconds of activity
+        if (reward.newBadges && reward.newBadges.length > 0) {
+          message += `\n\n🏆 New badge: ${reward.newBadges[0].emoji} ${reward.newBadges[0].name}!`;
+        }
+        if (reward.newLevel) {
+          message += `\n\n⭐ Level ${reward.newLevel}!`;
+        }
+        Alert.alert('Great Job! ⭐', message);
+      }
+    } catch (error) {
+      console.error('Error awarding points:', error);
     }
   };
 
@@ -215,18 +223,9 @@ const MindfulActivitiesScreen = () => {
           timestamp: new Date(),
         });
         
-        // Award points!
-        const reward = await GamificationSystem.awardPoints('GRATITUDE_JOURNAL');
+        // Award points once
+        await awardActivityPoints('gratitude_current', 'GRATITUDE_JOURNAL');
         
-        let message = `Saved! ✨\n\n+${reward.pointsAwarded} points earned!`;
-        if (reward.streakBonus > 0) {
-          message += `\n+${reward.streakBonus} streak bonus!`;
-        }
-        if (reward.newBadges && reward.newBadges.length > 0) {
-          message += `\n\n🏆 New badge: ${reward.newBadges[0].emoji} ${reward.newBadges[0].name}!`;
-        }
-        
-        Alert.alert('Great Work!', message);
         setGratitudeText('');
       } catch (error) {
         Alert.alert('Saved Locally! 💾', 'Your gratitude is recorded in your heart.');
@@ -350,7 +349,15 @@ const MindfulActivitiesScreen = () => {
         <Text style={styles.breathCountText}>Breaths completed: {breathCount}</Text>
         <TouchableOpacity 
           style={styles.breathButton}
-          onPress={() => setBreathCount(breathCount + 1)}
+          onPress={async () => {
+            const newCount = breathCount + 1;
+            setBreathCount(newCount);
+            
+            // Award points after completing 3 breaths
+            if (newCount === 3 && !completedActivities.has('breathing_current')) {
+              await awardActivityPoints('breathing_current', 'BREATHING_EXERCISE');
+            }
+          }}
         >
           <Text style={styles.breathButtonText}>Complete Breath ✓</Text>
         </TouchableOpacity>
@@ -780,7 +787,7 @@ const MindfulActivitiesScreen = () => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Gamification Widget */}
-        <GamificationWidget compact={true} />
+        <GamificationWidget key={gamificationKey} compact={true} />
         
         {!activeActivity ? (
           <>
