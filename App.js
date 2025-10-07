@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HistoryScreen from './screens/HistoryScreen';
 import ChatbotScreen from './screens/ChatbotScreen';
 import MoodCheckModal from './components/MoodCheckModal';
+import MindfulActivitiesScreen from './screens/MindfulActivitiesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -49,13 +50,13 @@ export default function App() {
                 iconName = focused ? 'time' : 'time-outline';
               } else if (route.name === 'Kintsugi AI') {
                 iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-              } else if (route.name === 'Journal') {
-                iconName = focused ? 'book' : 'book-outline';
+              } else if (route.name === 'Mindful') {
+                iconName = focused ? 'leaf' : 'leaf-outline';
               }
 
               return <Ionicons name={iconName} size={size} color={color} />;
             },
-            tabBarActiveTintColor: '#FF6B6B',
+            tabBarActiveTintColor: '#4CAF50',
             tabBarInactiveTintColor: 'gray',
             headerShown: false,
             tabBarStyle: {
@@ -73,6 +74,7 @@ export default function App() {
           })}
         >
           <Tab.Screen name="Kintsugi AI" component={ChatbotScreen} />
+          <Tab.Screen name="Mindful" component={MindfulActivitiesScreen} />
           <Tab.Screen name="History" component={HistoryScreen} />
         </Tab.Navigator>
       </NavigationContainer>

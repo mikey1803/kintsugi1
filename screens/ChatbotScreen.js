@@ -331,12 +331,105 @@ const ChatbotScreen = () => {
     }
   };
   
+  // Check for crisis indicators
+  const detectCrisisLevel = (data) => {
+    const { mood, stress, energy, focus, social } = data;
+    
+    // SEVERE CRISIS: Multiple severe indicators
+    if ((stress >= 9 && mood === 'negative' && energy <= 2) || 
+        (stress >= 8 && mood === 'negative' && social === 'withdrawn' && focus === 'poor')) {
+      return 'severe';
+    }
+    
+    // HIGH RISK: Strong concerning patterns
+    if ((stress >= 8 && mood === 'negative') || 
+        (mood === 'negative' && energy <= 3 && social === 'withdrawn') ||
+        (stress >= 9 && energy <= 3)) {
+      return 'high';
+    }
+    
+    // MODERATE CONCERN: Some warning signs
+    if ((stress >= 7 && mood === 'negative') || 
+        (mood === 'negative' && social === 'withdrawn') ||
+        (stress >= 8)) {
+      return 'moderate';
+    }
+    
+    return 'normal';
+  };
+
   // Generate comprehensive wellness summary based on all 5 answers
   const generateWellnessSummary = async (data) => {
     const { mood, stress, energy, focus, social } = data;
+    const crisisLevel = detectCrisisLevel(data);
     
-    let summary = "💙 **Thank you for completing the wellness check-in!** Here's what I'm seeing:\n\n";
-    summary += "---\n\n";
+    // CRISIS RESPONSE - Prioritize safety
+    if (crisisLevel === 'severe' || crisisLevel === 'high') {
+      let crisisMessage = "🚨 **I'm really concerned about how you're feeling right now.**\n\n";
+      crisisMessage += "Based on what you've shared, you're experiencing a very difficult time. **Your wellbeing is the most important thing**, and I want to make sure you have immediate support.\n\n";
+      crisisMessage += "---\n\n";
+      crisisMessage += "**� IMMEDIATE SUPPORT - Please Reach Out:**\n\n";
+      crisisMessage += "🆘 **National Crisis Helpline**: 988\n";
+      crisisMessage += "   • Available 24/7, free, confidential\n";
+      crisisMessage += "   • Text or call - they're trained to help\n\n";
+      crisisMessage += "💬 **Crisis Text Line**: Text HOME to 741741\n";
+      crisisMessage += "   • If talking feels hard, text instead\n\n";
+      crisisMessage += "🌍 **International Association for Suicide Prevention**: findahelpline.com\n\n";
+      
+      if (crisisLevel === 'severe') {
+        crisisMessage += "⚠️ **If you're in immediate danger**, please call 911 or go to your nearest emergency room. Your life matters.\n\n";
+      }
+      
+      crisisMessage += "---\n\n";
+      crisisMessage += "**🌸 While You're Here - Calming Exercises:**\n\n";
+      crisisMessage += "These can help you feel safer right now:\n\n";
+      crisisMessage += "**1. Grounding (5-4-3-2-1):**\n";
+      crisisMessage += "   • Name 5 things you can SEE\n";
+      crisisMessage += "   • Name 4 things you can TOUCH\n";
+      crisisMessage += "   • Name 3 things you can HEAR\n";
+      crisisMessage += "   • Name 2 things you can SMELL\n";
+      crisisMessage += "   • Name 1 thing you can TASTE\n\n";
+      crisisMessage += "**2. Box Breathing:**\n";
+      crisisMessage += "   • Breathe IN for 4 seconds\n";
+      crisisMessage += "   • HOLD for 4 seconds\n";
+      crisisMessage += "   • Breathe OUT for 4 seconds\n";
+      crisisMessage += "   • HOLD for 4 seconds\n";
+      crisisMessage += "   • Repeat 4 times\n\n";
+      crisisMessage += "**3. Cold Water:**\n";
+      crisisMessage += "   • Splash cold water on your face\n";
+      crisisMessage += "   • Hold ice cubes in your hands\n";
+      crisisMessage += "   • This activates your body's calming response\n\n";
+      crisisMessage += "---\n\n";
+      crisisMessage += "💙 **You don't have to face this alone.** Please reach out to one of those helplines. They're there for you, and they want to help.\n\n";
+      crisisMessage += "I'll be here too. Would you like to talk about what's making things feel so overwhelming right now? 💙";
+      
+      return crisisMessage;
+    }
+    
+    // MODERATE CONCERN - Supportive check-in with resources
+    if (crisisLevel === 'moderate') {
+      let concernMessage = "💙 **Thank you for being honest about how you're feeling.**\n\n";
+      concernMessage += "I'm noticing some concerning patterns in your check-in. You're going through a difficult time, and I want you to know that support is available.\n\n";
+      concernMessage += "---\n\n";
+      concernMessage += "**📞 Support Resources (Available 24/7):**\n\n";
+      concernMessage += "🆘 **Crisis Helpline**: 988 (call or text)\n";
+      concernMessage += "💬 **Crisis Text Line**: Text HOME to 741741\n";
+      concernMessage += "🤗 **SAMHSA Helpline**: 1-800-662-4357 (mental health support)\n\n";
+      concernMessage += "Don't hesitate to reach out if you need someone to talk to. There's no shame in asking for help.\n\n";
+      concernMessage += "---\n\n";
+      concernMessage += "**🌸 Quick Calming Exercise:**\n\n";
+      concernMessage += "Try this 4-7-8 breathing technique right now:\n";
+      concernMessage += "• Breathe IN through your nose for 4 counts\n";
+      concernMessage += "• HOLD your breath for 7 counts\n";
+      concernMessage += "• Breathe OUT through your mouth for 8 counts\n";
+      concernMessage += "• Repeat 4 times\n\n";
+      concernMessage += "This helps activate your body's natural calming response.\n\n";
+      concernMessage += "---\n\n";
+      
+      summary = concernMessage + summary;
+    }
+    
+    let summary = crisisLevel === 'moderate' ? '' : "💙 **Thank you for completing the wellness check-in!** Here's what I'm seeing:\n\n---\n\n";
     
     // Overall Assessment
     summary += "**📊 Your Current State:**\n\n";
