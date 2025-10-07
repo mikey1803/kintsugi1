@@ -9,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, orderBy, query, limit } from 'firebase/firestore';
 import { MOOD_PLAYLISTS } from '../config/MoodPlaylists';
-import { emergencyResourceFinder } from '../utils/EmergencyResources'; 
+import { emergencyResourceFinder } from '../utils/EmergencyResources';
+import HuggingFaceTherapist from '../utils/HuggingFaceIntegration'; 
 
 const BOT_USER = {
   _id: 2,
@@ -23,6 +24,9 @@ const ChatbotScreen = () => {
   const [currentMusicRecommendation, setCurrentMusicRecommendation] = useState(null);
   const [showMusicButton, setShowMusicButton] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Initialize Hugging Face Therapist
+  const [huggingFaceTherapist] = useState(() => new HuggingFaceTherapist());
   
   // Conversation Context Memory - Maintains therapeutic continuity
   const [conversationContext, setConversationContext] = useState({
@@ -657,11 +661,61 @@ What feels like the most manageable first step for you in getting some support?`
     return { emotion: dominantEmotion, score: maxScore, needsMusic };
   };
 
-  // Fast Therapist AI - Optimized for quick responses
+  // Enhanced AI Response with Hugging Face Integration
+  const generateAdvancedKintsugiResponse = async (message, userMoodData) => {
+    const originalMessage = message;
+    const msg = message.toLowerCase();
+    console.log('🚀 Advanced Hugging Face AI analyzing:', originalMessage);
+    
+    try {
+      // Crisis check first (always use our safe local system for this)
+      const crisisDetection = detectCrisisSituation(originalMessage);
+      if (crisisDetection.level !== 'none') {
+        console.log('🚨 CRISIS DETECTED - Using local crisis system');
+        const crisisResponse = await generateCrisisResponse(crisisDetection, originalMessage);
+        return crisisResponse;
+      }
+      
+      // Emotion analysis for context
+      const emotionData = analyzeMessageEmotion(msg);
+      console.log('🎭 Emotion detected:', emotionData);
+      
+      // Use Hugging Face for advanced therapeutic response
+      console.log('🤗 Calling Hugging Face API...');
+      const huggingFaceResponse = await huggingFaceTherapist.generateTherapeuticResponse(
+        originalMessage, 
+        emotionData, 
+        crisisDetection.level
+      );
+      
+      // Music recommendation
+      const musicRecommendation = getMusicRecommendation(emotionData.emotion);
+      const shouldShowMusic = emotionData.needsMusic;
+      
+      console.log('🚀 Advanced response generated with Hugging Face');
+      
+      return {
+        reply: huggingFaceResponse,
+        emotion: emotionData.emotion,
+        situation: 'hugging_face_response',
+        context: 'advanced_ai_model',
+        musicRecommendation: musicRecommendation,
+        showMusicButton: shouldShowMusic,
+        isAdvancedResponse: true
+      };
+      
+    } catch (error) {
+      console.error('🚨 Hugging Face Error, falling back to local AI:', error);
+      // Fallback to original system if Hugging Face fails
+      return await generateFastKintsugiResponse(message, userMoodData);
+    }
+  };
+
+  // Fast Therapist AI - Optimized for quick responses (Fallback system)
   const generateFastKintsugiResponse = async (message, userMoodData) => {
     const originalMessage = message;
     const msg = message.toLowerCase();
-    console.log('⚡ Fast Therapist AI analyzing:', originalMessage);
+    console.log('⚡ Local AI analyzing (fallback):', originalMessage);
     
     try {
       // Quick crisis check first
@@ -691,7 +745,7 @@ What feels like the most manageable first step for you in getting some support?`
         updateConversationContext(therapistAnalysis, originalMessage, contextAnalysis);
       }, 0);
       
-      console.log('⚡ Fast response generated');
+      console.log('⚡ Local response generated');
       
       return {
         reply: reply,
@@ -704,7 +758,7 @@ What feels like the most manageable first step for you in getting some support?`
       
     } catch (error) {
       console.error('⚠️ AI processing error:', error);
-      // Fallback response for any errors
+      // Ultimate fallback response
       return {
         reply: `💙 I'm here to listen and support you. While I process what you've shared, know that your feelings are valid and important. What's the most pressing thing on your mind right now?`,
         emotion: 'supportive',
@@ -1876,7 +1930,7 @@ What feels most important for you to talk about right now? I'm here to listen an
     setIsLoading(true);
     
     try {
-      // Add timeout to prevent hanging on phone
+      // Use local AI system (works perfectly without external dependencies)
       const responsePromise = generateFastKintsugiResponse(userMessage, userMoodData);
       
       const timeoutPromise = new Promise((_, reject) => 
