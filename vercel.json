@@ -1,7 +1,8 @@
 {
   "functions": {
-    "backend/api/**/*.js": {
-      "memory": 1024
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 30
     }
   }
 }

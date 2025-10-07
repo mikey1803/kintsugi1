@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kintsugi",
-    "slug": "kintsugi",
+    "name": "kintsugi icant do it again",
+    "slug": "kintsugi-icant-do-it-again",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -28,7 +28,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "4c001e23-a722-4fbc-86fc-dac80d56731a"
+        "projectId": "5dae1745-f33a-4df9-bf9a-56d240cb1f07"
       }
     }
   }
