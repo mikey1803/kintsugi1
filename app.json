@@ -29,8 +29,7 @@
     "extra": {
       "eas": {
         "projectId": "5dae1745-f33a-4df9-bf9a-56d240cb1f07"
-      },
-      "HUGGING_FACE_TOKEN": "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"
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-# 🏺 Kintsugi AI Wellness App - Complete Project Documentation
+🏺 Kintsugi AI Wellness App - Complete Project Documentation
 
 ## 📋 **Project Overview**
 

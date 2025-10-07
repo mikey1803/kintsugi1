@@ -15,7 +15,7 @@ import HuggingFaceTherapist from '../utils/HuggingFaceIntegration';
 const BOT_USER = {
   _id: 2,
   name: 'Kintsugi AI',
-  avatar: 'https://i.imgur.com/gPcrbBC.png',
+  avatar: 'https://i.imgur.com/7XQCuqh.png', // Beautiful mindfulness/mental health icon
 };
 
 const ChatbotScreen = () => {
@@ -27,6 +27,18 @@ const ChatbotScreen = () => {
   
   // Initialize Hugging Face Therapist
   const [huggingFaceTherapist] = useState(() => new HuggingFaceTherapist());
+  
+  // Wellness Check-in Flow State
+  const [checkInMode, setCheckInMode] = useState(false);
+  const [checkInData, setCheckInData] = useState({
+    mood: null,
+    stress: null,
+    energy: null,
+    focus: null,
+    social: null
+  });
+  const [currentCheckInStep, setCurrentCheckInStep] = useState(0);
+  const [hasCompletedInitialCheckIn, setHasCompletedInitialCheckIn] = useState(false);
   
   // Conversation Context Memory - Maintains therapeutic continuity
   const [conversationContext, setConversationContext] = useState({
@@ -44,46 +56,47 @@ const ChatbotScreen = () => {
 
   const initializeChat = async () => {
     try {
-      // Get user's recent mood data for personalized responses
+      // Get user's recent mood data for personalized responses (non-blocking)
       const moodsQuery = query(collection(db, 'moods'), orderBy('timestamp', 'desc'), limit(3));
       const querySnapshot = await getDocs(moodsQuery);
       
       const recentMoods = querySnapshot.docs.map(doc => doc.data());
       setUserMoodData(recentMoods);
       
-      // Get personalized greeting based on recent moods
-      const welcomeMessage = getPersonalizedGreeting(recentMoods);
-      // Personal, friend-like daily encouragement
-      const dailyTips = [
-        "🌸 You know what? Today feels like a day full of possibilities. I have a good feeling about this.",
-        "✨ I was just thinking - you've been growing so much, even when you can't see it. That's pretty amazing.",
-        "💛 Here's something I want you to remember today: you're braver than you believe and stronger than you know.",
-        "🌟 Whatever today brings, remember that I'm here in your corner, cheering you on.",
-        "🏺 Like those beautiful Kintsugi pieces, you're becoming more precious with every experience - even the tough ones."
-      ];
-      const dailyTip = dailyTips[Math.floor(Math.random() * dailyTips.length)];
-      
+      // Start with welcome message
       setMessages([
         {
           _id: 1,
-          text: `${welcomeMessage}\n\n${dailyTip}`,
+          text: "Hey there! 💙 Welcome to Kintsugi AI. I'm here as your companion and friend.\n\nBefore we start, I'd love to check in with you...",
           createdAt: new Date(),
           user: BOT_USER,
         },
       ]);
+      
+      // Only auto-start check-in on first load, reduced delay for faster startup
+      if (!hasCompletedInitialCheckIn) {
+        setTimeout(() => {
+          startWellnessCheckIn();
+        }, 800); // Reduced from 1500ms to 800ms for faster startup
+      }
+      
     } catch (error) {
       console.log("Could not load mood data, using default greeting");
-      const welcomeMessage = "Hey there! I'm so glad you're here. I'm Kintsugi - think of me as your friend who's always ready to listen, understand, and walk alongside you through whatever you're going through. 💙";
-      const dailyTip = "✨ You know what? Just like those beautiful Kintsugi pottery pieces, your struggles are creating golden lines of strength in your story.";
-      
       setMessages([
         {
           _id: 1,
-          text: `${welcomeMessage}\n\n${dailyTip}`,
+          text: "Hey there! 💙 Welcome to Kintsugi AI. I'm here as your companion and friend.\n\nBefore we start, I'd love to check in with you...",
           createdAt: new Date(),
           user: BOT_USER,
         },
       ]);
+      
+      // Only auto-start check-in on first load
+      if (!hasCompletedInitialCheckIn) {
+        setTimeout(() => {
+          startWellnessCheckIn();
+        }, 800);
+      }
     }
   };
 
@@ -110,6 +123,553 @@ const ChatbotScreen = () => {
     };
 
     return personalizedGreetings[moodName] || "Hey beautiful! I'm Kintsugi, and I'm here as your friend and companion. What's happening in your world today? 🌸";
+  };
+
+  // ========== WELLNESS CHECK-IN FLOW ==========
+  
+  // Start the interactive wellness check-in
+  const startWellnessCheckIn = () => {
+    setCheckInMode(true);
+    setCurrentCheckInStep(1);
+    setCheckInData({
+      mood: null,
+      stress: null,
+      energy: null,
+      focus: null,
+      social: null
+    });
+    
+    // Send first check-in question - Mood/Day quality
+    const firstQuestion = {
+      _id: new Date().getTime(),
+      text: "QUESTION 1 OF 5: OVERALL MOOD 🌤️\n\nHow would you describe your emotional state today?\n\nThink about your general feelings throughout the day - were you mostly happy, sad, stressed, calm, angry, or something else?\n\nJust describe it in your own words! 💙",
+      createdAt: new Date(),
+      user: BOT_USER,
+    };
+    
+    setMessages(previousMessages =>
+      GiftedChat.append(previousMessages, [firstQuestion])
+    );
+  };
+  
+  // Process wellness check-in responses
+  const processCheckInResponse = async (userResponse) => {
+    const response = userResponse.toLowerCase().trim();
+    
+    // QUESTION 1: Overall Mood
+    if (currentCheckInStep === 1) {
+      let moodLevel = null;
+      
+      // Detect mood from response
+      if (response.includes('great') || response.includes('amazing') || response.includes('wonderful') || 
+          response.includes('fantastic') || response.includes('awesome') || response.includes('happy') ||
+          response.includes('good') || response.includes('excellent') || response.includes('positive') ||
+          response.includes('calm') || response.includes('peaceful') || response.includes('content')) {
+        moodLevel = 'positive';
+      } else if (response.includes('bad') || response.includes('terrible') || response.includes('awful') ||
+                 response.includes('horrible') || response.includes('sad') || response.includes('difficult') ||
+                 response.includes('hard') || response.includes('rough') || response.includes('tough') ||
+                 response.includes('depressed') || response.includes('anxious') || response.includes('angry') ||
+                 response.includes('stressed') || response.includes('overwhelmed') || response.includes('frustrated')) {
+        moodLevel = 'negative';
+      } else {
+        moodLevel = 'neutral';
+      }
+      
+      setCheckInData(prev => ({ ...prev, mood: moodLevel }));
+      
+      // Move to Question 2: Stress Level
+      const nextQuestion = {
+        _id: new Date().getTime() + 1,
+        text: "QUESTION 2 OF 5: STRESS LEVEL 🌊\n\nOn a scale of 1-10, how stressed do you feel right now?\n\n1 = Completely relaxed, no worries\n5 = Moderate stress, manageable\n10 = Extremely stressed, overwhelmed\n\nJust send me a number between 1 and 10! 🎯",
+        createdAt: new Date(),
+        user: BOT_USER,
+      };
+      
+      setTimeout(() => {
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [nextQuestion]));
+        setCurrentCheckInStep(2);
+      }, 500);
+    }
+    
+    // QUESTION 2: Stress Level
+    else if (currentCheckInStep === 2) {
+      let stressLevel = 5; // Default to moderate
+      
+      // Extract number from response
+      const numbers = response.match(/\d+/);
+      if (numbers) {
+        stressLevel = parseInt(numbers[0]);
+        if (stressLevel < 1) stressLevel = 1;
+        if (stressLevel > 10) stressLevel = 10;
+      } else {
+        // Handle word responses
+        if (response.includes('low') || response.includes('relaxed') || response.includes('calm')) {
+          stressLevel = 2;
+        } else if (response.includes('high') || response.includes('overwhelm') || response.includes('extreme')) {
+          stressLevel = 9;
+        } else if (response.includes('moderate') || response.includes('medium') || response.includes('okay')) {
+          stressLevel = 5;
+        }
+      }
+      
+      setCheckInData(prev => ({ ...prev, stress: stressLevel }));
+      
+      // Move to Question 3: Energy Level
+      const nextQuestion = {
+        _id: new Date().getTime() + 1,
+        text: "QUESTION 3 OF 5: ENERGY LEVEL ⚡\n\nHow would you rate your energy level today?\n\n1-3 = Exhausted, can barely function\n4-6 = Moderate energy, getting by\n7-10 = High energy, feeling energized\n\nWhat number best describes your energy? 💪",
+        createdAt: new Date(),
+        user: BOT_USER,
+      };
+      
+      setTimeout(() => {
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [nextQuestion]));
+        setCurrentCheckInStep(3);
+      }, 500);
+    }
+    
+    // QUESTION 3: Energy Level
+    else if (currentCheckInStep === 3) {
+      let energyLevel = 5; // Default to moderate
+      
+      // Extract number from response
+      const numbers = response.match(/\d+/);
+      if (numbers) {
+        energyLevel = parseInt(numbers[0]);
+        if (energyLevel < 1) energyLevel = 1;
+        if (energyLevel > 10) energyLevel = 10;
+      } else {
+        // Handle word responses
+        if (response.includes('exhaust') || response.includes('tired') || response.includes('drain') || response.includes('low')) {
+          energyLevel = 2;
+        } else if (response.includes('high') || response.includes('energi') || response.includes('great')) {
+          energyLevel = 8;
+        } else if (response.includes('moderate') || response.includes('medium') || response.includes('okay')) {
+          energyLevel = 5;
+        }
+      }
+      
+      setCheckInData(prev => ({ ...prev, energy: energyLevel }));
+      
+      // Move to Question 4: Focus/Concentration
+      const nextQuestion = {
+        _id: new Date().getTime() + 1,
+        text: "QUESTION 4 OF 5: FOCUS & CONCENTRATION 🎯\n\nHow well are you able to focus and concentrate today?\n\nThink about:\n- Can you stay focused on tasks?\n- Is your mind wandering a lot?\n- Are you easily distracted?\n- Can you think clearly?\n\nDescribe your ability to focus (great, okay, struggling, etc.) 🧠",
+        createdAt: new Date(),
+        user: BOT_USER,
+      };
+      
+      setTimeout(() => {
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [nextQuestion]));
+        setCurrentCheckInStep(4);
+      }, 500);
+    }
+    
+    // QUESTION 4: Focus Level
+    else if (currentCheckInStep === 4) {
+      let focusLevel = 'moderate';
+      
+      if (response.includes('great') || response.includes('good') || response.includes('clear') || 
+          response.includes('sharp') || response.includes('focused')) {
+        focusLevel = 'good';
+      } else if (response.includes('struggle') || response.includes('bad') || response.includes('cant') || 
+                 response.includes("can't") || response.includes('difficult') || response.includes('distract') ||
+                 response.includes('wander')) {
+        focusLevel = 'poor';
+      } else {
+        focusLevel = 'moderate';
+      }
+      
+      setCheckInData(prev => ({ ...prev, focus: focusLevel }));
+      
+      // Move to Question 5: Social Comfort
+      const nextQuestion = {
+        _id: new Date().getTime() + 1,
+        text: "QUESTION 5 OF 5: SOCIAL COMFORT 👥\n\nHow do you feel about social interactions today?\n\nThink about:\n- Do you want to be around people or prefer alone time?\n- Does talking to others feel easy or draining?\n- Are you feeling social or withdrawn?\n- How comfortable are you with human interaction right now?\n\nDescribe how you're feeling about being social! 🤗",
+        createdAt: new Date(),
+        user: BOT_USER,
+      };
+      
+      setTimeout(() => {
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [nextQuestion]));
+        setCurrentCheckInStep(5);
+      }, 500);
+    }
+    
+    // QUESTION 5: Social Comfort
+    else if (currentCheckInStep === 5) {
+      let socialLevel = 'neutral';
+      
+      if (response.includes('want') || response.includes('social') || response.includes('people') || 
+          response.includes('talk') || response.includes('comfortable') || response.includes('easy') ||
+          response.includes('enjoy')) {
+        socialLevel = 'social';
+      } else if (response.includes('alone') || response.includes('withdraw') || response.includes('avoid') || 
+                 response.includes('difficult') || response.includes('drain') || response.includes('anxious') ||
+                 response.includes('prefer not')) {
+        socialLevel = 'withdrawn';
+      } else {
+        socialLevel = 'neutral';
+      }
+      
+      setCheckInData(prev => ({ ...prev, social: socialLevel }));
+      
+      // Generate comprehensive wellness summary
+      setTimeout(async () => {
+        const summaryResponse = await generateWellnessSummary(checkInData);
+        const summaryMsg = {
+          _id: new Date().getTime() + 1,
+          text: summaryResponse,
+          createdAt: new Date(),
+          user: BOT_USER,
+        };
+        setMessages(previousMessages => GiftedChat.append(previousMessages, [summaryMsg]));
+        setCheckInMode(false); // End check-in
+        setHasCompletedInitialCheckIn(true); // Mark as completed so it doesn't re-trigger
+      }, 500);
+    }
+  };
+  
+  // Generate comprehensive wellness summary based on all 5 answers
+  const generateWellnessSummary = async (data) => {
+    const { mood, stress, energy, focus, social } = data;
+    
+    let summary = "💙 **Thank you for completing the wellness check-in!** Here's what I'm seeing:\n\n";
+    summary += "---\n\n";
+    
+    // Overall Assessment
+    summary += "**📊 Your Current State:**\n\n";
+    
+    // Mood assessment
+    if (mood === 'positive') {
+      summary += "✨ **Mood**: You're in a positive emotional state today, which is wonderful! This positive energy can be a great foundation for tackling challenges.\n\n";
+    } else if (mood === 'negative') {
+      summary += "💙 **Mood**: You're experiencing some difficult emotions today. That's completely valid, and it's brave of you to acknowledge how you're feeling.\n\n";
+    } else {
+      summary += "🌸 **Mood**: You're in a neutral emotional space - not particularly up or down. Sometimes that's just where we are, and that's okay.\n\n";
+    }
+    
+    // Stress assessment
+    if (stress >= 8) {
+      summary += "🚨 **Stress**: Your stress level is very high (8+/10). This level of stress can be overwhelming and affect your physical and mental health. This needs attention.\n\n";
+    } else if (stress >= 5) {
+      summary += "🌊 **Stress**: You're experiencing moderate stress (5-7/10). It's manageable but worth addressing so it doesn't build up.\n\n";
+    } else {
+      summary += "🌿 **Stress**: Your stress level is relatively low (<5/10). You're doing well in managing life's pressures right now.\n\n";
+    }
+    
+    // Energy assessment
+    if (energy <= 3) {
+      summary += "😴 **Energy**: Your energy is very low (3 or below). You might be experiencing fatigue, burnout, or depletion. Rest and self-care are important.\n\n";
+    } else if (energy <= 6) {
+      summary += "⚡ **Energy**: You have moderate energy (4-6/10). You're getting by, but you might benefit from recharging.\n\n";
+    } else {
+      summary += "💪 **Energy**: You have good energy levels (7+/10)! You're feeling strong and capable today.\n\n";
+    }
+    
+    // Focus assessment
+    if (focus === 'poor') {
+      summary += "🌀 **Focus**: You're struggling with concentration today. Brain fog, distractions, or racing thoughts might be making it hard to focus.\n\n";
+    } else if (focus === 'moderate') {
+      summary += "🎯 **Focus**: Your concentration is okay - not perfect, but functional. Some tasks might require extra effort.\n\n";
+    } else {
+      summary += "🧠 **Focus**: Your mental clarity and concentration are good! You can think clearly and stay on task.\n\n";
+    }
+    
+    // Social assessment
+    if (social === 'withdrawn') {
+      summary += "🏠 **Social**: You're feeling withdrawn and preferring solitude today. That's valid - sometimes we need alone time to recharge.\n\n";
+    } else if (social === 'neutral') {
+      summary += "👥 **Social**: You're neutral about social interaction - can take it or leave it. Not craving connection but not avoiding it either.\n\n";
+    } else {
+      summary += "🤗 **Social**: You're feeling social and open to connecting with others! Human interaction feels good to you today.\n\n";
+    }
+    
+    summary += "---\n\n";
+    
+    // Personalized recommendations based on the pattern
+    summary += "**💡 Personalized Recommendations:**\n\n";
+    
+    // High stress + low energy pattern
+    if (stress >= 7 && energy <= 4) {
+      summary += "**You're showing signs of burnout or overwhelm.**\n\n";
+      summary += "What this means: High stress combined with low energy is your body's way of saying it needs rest and recovery. You're running on empty.\n\n";
+      summary += "**What will help:**\n";
+      summary += "🛑 **Prioritize rest**: This isn't optional - your body needs it\n";
+      summary += "🌊 **Stress reduction**: Deep breathing, meditation, or gentle movement\n";
+      summary += "💧 **Basics first**: Water, nutrition, sleep - don't skip these\n";
+      summary += "🤗 **Ask for help**: Delegate, say no to new commitments\n";
+      summary += "📞 **Consider support**: Talk to someone you trust or a professional\n\n";
+    }
+    
+    // Negative mood + withdrawn + poor focus
+    else if (mood === 'negative' && social === 'withdrawn' && focus === 'poor') {
+      summary += "**You're showing signs that align with depression or emotional distress.**\n\n";
+      summary += "What this means: Feeling down, isolating yourself, and struggling to concentrate are common depression symptoms. You deserve support.\n\n";
+      summary += "**What will help:**\n";
+      summary += "💙 **Don't isolate completely**: Even small connections matter\n";
+      summary += "🌸 **Be gentle with yourself**: You're not lazy or broken\n";
+      summary += "☀️ **Tiny goals**: Just one small thing today - that counts\n";
+      summary += "🤗 **Reach out**: Text a friend, talk to family, or call a helpline\n";
+      summary += "📞 **Professional help**: Consider therapy - it truly helps\n";
+      summary += "🆘 **Crisis support**: 988 if you need immediate help\n\n";
+    }
+    
+    // High stress + poor focus
+    else if (stress >= 6 && focus === 'poor') {
+      summary += "**Stress is affecting your ability to concentrate.**\n\n";
+      summary += "What this means: When we're stressed, our brain struggles to focus because it's in threat-detection mode. This is normal but manageable.\n\n";
+      summary += "**What will help:**\n";
+      summary += "🧘 **Grounding exercises**: 5-4-3-2-1 technique to calm your nervous system\n";
+      summary += "💨 **Box breathing**: In for 4, hold 4, out 4, hold 4 - repeat\n";
+      summary += "📝 **Brain dump**: Write down everything on your mind to clear mental space\n";
+      summary += "🎯 **One thing at a time**: Multitasking increases stress\n";
+      summary += "⏰ **Pomodoro technique**: 25 min focus, 5 min break\n\n";
+    }
+    
+    // Positive mood + high energy + good focus
+    else if (mood === 'positive' && energy >= 7 && focus === 'good') {
+      summary += "**You're in a really good space right now!**\n\n";
+      summary += "What this means: Your mental, emotional, and physical state are aligned in a positive way. This is the time to tackle challenges and enjoy life!\n\n";
+      summary += "**Make the most of it:**\n";
+      summary += "🎯 **Tackle important tasks**: Use this energy wisely\n";
+      summary += "🌟 **Connect with others**: Share your positive energy\n";
+      summary += "💪 **Build momentum**: Start that project you've been putting off\n";
+      summary += "🌸 **Practice gratitude**: Notice and appreciate this feeling\n";
+      summary += "📸 **Remember this**: On hard days, recall that you felt like this\n\n";
+    }
+    
+    // Low energy + withdrawn
+    else if (energy <= 4 && social === 'withdrawn') {
+      summary += "**You're in need of rest and recharging.**\n\n";
+      summary += "What this means: Your battery is low, and you're instinctively pulling back to conserve energy. Listen to this need.\n\n";
+      summary += "**What will help:**\n";
+      summary += "😴 **Rest without guilt**: It's okay to pause\n";
+      summary += "🏠 **Alone time**: Honor your need for solitude\n";
+      summary += "📺 **Low-energy activities**: Reading, gentle music, comfort shows\n";
+      summary += "💧 **Self-care basics**: Hydrate, eat something nourishing\n";
+      summary += "🌙 **Early bedtime**: Your body is asking for sleep\n\n";
+    }
+    
+    // General moderate state
+    else {
+      summary += "**You're in a balanced, moderate state.**\n\n";
+      summary += "What this means: Nothing is extremely high or low - you're managing life reasonably well right now.\n\n";
+      summary += "**To maintain balance:**\n";
+      summary += "✨ **Consistency**: Keep up your current routines\n";
+      summary += "🌊 **Monitor stress**: Don't let it build up unnoticed\n";
+      summary += "💪 **Small self-care**: Regular small actions prevent big crashes\n";
+      summary += "🤗 **Stay connected**: Maintain your relationships\n";
+      summary += "🎯 **Check in regularly**: Keep assessing how you're doing\n\n";
+    }
+    
+    summary += "---\n\n";
+    summary += "**What would you like to talk about?** Based on your check-in, is there something specific that's weighing on you or that you'd like support with? I'm here to listen and help. 💙";
+    
+    return summary;
+  };
+
+  // Generate celebration response for positive days
+  const generateCelebrationResponse = (userMessage) => {
+    const msg = userMessage.toLowerCase();
+    
+    let response = "🌟 That's absolutely wonderful! ";
+    
+    if (msg.includes('work') || msg.includes('job') || msg.includes('promotion') || msg.includes('project')) {
+      response += "It sounds like things went really well at work today! Those moments of professional success and recognition are so important to celebrate.\n\n";
+      response += "💪 You worked hard for this, and you deserve to feel proud. Career wins like this don't happen by accident - they happen because of your dedication and effort.\n\n";
+      response += "What does this success mean to you? How does it feel to be recognized? 🌟";
+    } else if (msg.includes('friend') || msg.includes('date') || msg.includes('relationship') || msg.includes('partner')) {
+      response += "Connection and good relationships are truly one of life's greatest joys! It sounds like you had some really meaningful time with people you care about.\n\n";
+      response += "💛 These moments of connection - laughing together, feeling understood, being present with someone - these are the things that make life beautiful.\n\n";
+      response += "What made this time together so special for you? 😊";
+    } else if (msg.includes('family') || msg.includes('mom') || msg.includes('dad') || msg.includes('parents')) {
+      response += "Family moments that go well are so precious! It sounds like you had some quality time that felt really good.\n\n";
+      response += "🌸 When family relationships feel good and supportive, it fills our hearts in a unique way. I'm glad you got to experience that today.\n\n";
+      response += "What made this time with your family feel so positive? 💙";
+    } else if (msg.includes('accomplished') || msg.includes('finished') || msg.includes('completed') || msg.includes('achieved')) {
+      response += "The feeling of accomplishment is SO powerful! You set out to do something, and you did it. That takes motivation, discipline, and follow-through.\n\n";
+      response += "✨ Taking a moment to acknowledge what you've achieved matters. You deserve to feel proud of yourself!\n\n";
+      response += "What felt best about completing this? The relief? The pride? The sense of progress? 🎯";
+    } else {
+      response += "I love hearing about the things that brought you joy today! Good days are gifts, and it's beautiful that you're taking time to appreciate this one.\n\n";
+      response += "💙 Hold onto this feeling - let it remind you that even when tough days come, good days exist too. You deserve happiness and joy.\n\n";
+      response += "Is there anything else you want to share about your day, or anything else on your mind? I'm here! 🌟";
+    }
+    
+    return response;
+  };
+  
+  // Generate detailed support response for difficult days
+  const generateDetailedSupportResponse = async (userMessage) => {
+    const msg = userMessage.toLowerCase();
+    
+    let supportResponse = "💙 Thank you for trusting me with this. I can hear how much this affected you today, and I want you to know that your feelings are completely valid. What you're experiencing matters.\n\n";
+    
+    // Work-related struggles
+    if (msg.includes('work') || msg.includes('job') || msg.includes('boss') || msg.includes('colleague') || msg.includes('fired') || msg.includes('quit')) {
+      supportResponse += "**Work difficulties can be so draining.** When we spend so much of our energy at work, conflicts or stress there can affect everything else in our lives.\n\n";
+      
+      if (msg.includes('boss') || msg.includes('manager')) {
+        supportResponse += "💼 **Difficult boss dynamics are exhausting.** You deserve to work in an environment where you feel respected and valued. What happened today isn't a reflection of your worth.\n\n";
+      } else if (msg.includes('fired') || msg.includes('quit') || msg.includes('lost my job')) {
+        supportResponse += "💼 **Job loss is a significant life change.** Even if it was the right decision, it's okay to feel scared, sad, or uncertain right now. Your career doesn't define your value as a person.\n\n";
+      } else {
+        supportResponse += "💼 **Work stress accumulates.** When every day feels like a battle, it wears us down physically and emotionally.\n\n";
+      }
+      
+      supportResponse += "**What might help:**\n";
+      supportResponse += "✨ **Set boundaries** - Your time and energy are valuable. It's okay to protect them\n";
+      supportResponse += "🌊 **Take real breaks** - Even 5 minutes away from your desk can help reset your mind\n";
+      supportResponse += "💪 **Document everything** - If there's mistreatment, having records protects you\n";
+      supportResponse += "🤗 **Talk to someone** - Don't carry this alone. Share with a friend, family, or therapist\n";
+      supportResponse += "🎯 **Remember your worth** - Bad work situations don't define you\n\n";
+      supportResponse += "What would feel most helpful for you right now? Do you need to vent more, problem-solve, or just feel heard? I'm here for whatever you need. 💛";
+    }
+    
+    // Relationship struggles
+    else if (msg.includes('boyfriend') || msg.includes('girlfriend') || msg.includes('partner') || msg.includes('relationship') || 
+             msg.includes('breakup') || msg.includes('broke up') || msg.includes('fight') || msg.includes('argue')) {
+      supportResponse += "**Relationship pain cuts deep.** When someone we love hurts us or when we're in conflict with them, it affects us on such a profound level.\n\n";
+      
+      if (msg.includes('breakup') || msg.includes('broke up') || msg.includes('ended')) {
+        supportResponse += "💔 **Breakups are grief.** You're not just losing the person - you're losing the future you imagined, the daily routines, the shared dreams. That loss is real and it deserves to be mourned.\n\n";
+      } else if (msg.includes('fight') || msg.includes('argue') || msg.includes('yelled')) {
+        supportResponse += "💔 **Fights with someone you love are painful.** Even if the conflict gets resolved, the emotional toll of that tension and hurt lingers.\n\n";
+      } else {
+        supportResponse += "💔 **Relationship struggles are exhausting.** When you're constantly navigating conflict, walking on eggshells, or feeling misunderstood, it drains your emotional energy.\n\n";
+      }
+      
+      supportResponse += "**What I want you to remember:**\n";
+      supportResponse += "💙 **Your feelings are valid** - You're allowed to feel hurt, angry, sad, or confused\n";
+      supportResponse += "🌸 **You deserve kindness** - Both from your partner and from yourself\n";
+      supportResponse += "🎯 **Communication matters** - Can you express your needs clearly? Do they listen?\n";
+      supportResponse += "🛡️ **Boundaries are love** - Protecting yourself emotionally is not selfish\n";
+      supportResponse += "✨ **You're worthy of love** - Real love shouldn't constantly hurt\n\n";
+      supportResponse += "Do you want to talk more about what happened? What specific part hurts the most right now? I'm here to listen without judgment. 💛";
+    }
+    
+    // Family conflict
+    else if (msg.includes('family') || msg.includes('parents') || msg.includes('mom') || msg.includes('dad') || 
+             msg.includes('mother') || msg.includes('father') || msg.includes('sibling')) {
+      supportResponse += "**Family dynamics can be incredibly complex and painful.** These are the people who are supposed to be our foundation, so when those relationships hurt, it hits different.\n\n";
+      
+      supportResponse += "**What makes family pain unique:**\n";
+      supportResponse += "💛 **You can't easily distance yourself** - Unlike friends or partners, family has a permanent role in our lives\n";
+      supportResponse += "🌸 **There's history** - Old wounds, patterns from childhood, expectations that have built up over years\n";
+      supportResponse += "🎯 **Pressure to forgive** - Society tells us \"they're family\" as if that erases the hurt\n";
+      supportResponse += "🛡️ **Conflicting emotions** - You can love them and need distance from them at the same time\n\n";
+      
+      supportResponse += "**What you need to know:**\n";
+      supportResponse += "✨ **You're not responsible for fixing them** - Their behavior and emotions are not your job to manage\n";
+      supportResponse += "🌿 **Boundaries with family are healthy** - Protecting yourself is valid, even from family\n";
+      supportResponse += "💙 **Your perspective is real** - Don't minimize your pain because they're family\n";
+      supportResponse += "🤗 **You can love them from a distance** - Both things can be true simultaneously\n\n";
+      supportResponse += "What boundary or support do you need most right now? What would help you feel safer or more at peace? 💛";
+    }
+    
+    // Loneliness and isolation
+    else if (msg.includes('lonely') || msg.includes('alone') || msg.includes('no friends') || msg.includes('isolated')) {
+      supportResponse += "**Loneliness is one of the most painful human experiences.** It's not just about being physically alone - it's about feeling disconnected, unseen, like no one truly understands.\n\n";
+      
+      supportResponse += "💙 **What I need you to hear:** You're not alone in this moment. I'm here with you, right now, and I see you. Your loneliness is valid, and it's not your fault.\n\n";
+      
+      supportResponse += "**Why loneliness hurts so much:**\n";
+      supportResponse += "🌸 **Humans are wired for connection** - Feeling isolated goes against our fundamental need\n";
+      supportResponse += "💫 **It creates a cycle** - Loneliness makes us withdraw, which makes us more lonely\n";
+      supportResponse += "🎯 **It affects everything** - Motivation, sleep, appetite, self-worth all suffer\n\n";
+      
+      supportResponse += "**What can help:**\n";
+      supportResponse += "🤗 **Small connections count** - Even brief interactions (like this one) matter\n";
+      supportResponse += "🌱 **Join communities** - Online or in-person groups around your interests\n";
+      supportResponse += "💡 **Quality over quantity** - One genuine friend beats 100 superficial ones\n";
+      supportResponse += "✨ **This can change** - Loneliness feels permanent but it's actually very changeable\n";
+      supportResponse += "🌟 **Be patient with yourself** - Building connections takes time\n\n";
+      supportResponse += "What kind of connection are you craving? What would meaningful friendship look like to you? Let's talk about this together. 💙";
+    }
+    
+    // Anxiety and stress
+    else if (msg.includes('anxious') || msg.includes('anxiety') || msg.includes('panic') || msg.includes('worried') || 
+             msg.includes('stress') || msg.includes('overwhelmed')) {
+      supportResponse += "**Anxiety can be absolutely overwhelming.** When your mind is racing, your chest is tight, and everything feels too much - it's exhausting and scary.\n\n";
+      
+      supportResponse += "💙 **First, let's ground you right now:**\n";
+      supportResponse += "Take a slow breath with me. In through your nose for 4... hold for 4... out through your mouth for 4. You're safe in this moment.\n\n";
+      
+      supportResponse += "**What anxiety does to us:**\n";
+      supportResponse += "🌊 **Catastrophizes** - Makes you believe the worst will happen\n";
+      supportResponse += "💫 **Steals the present** - Keeps you stuck worrying about the future\n";
+      supportResponse += "🎯 **Creates physical symptoms** - Racing heart, tight chest, trembling\n";
+      supportResponse += "💭 **Convinces you it's real** - Makes fears feel like facts\n\n";
+      
+      supportResponse += "**What actually helps:**\n";
+      supportResponse += "🌸 **5-4-3-2-1 Grounding**: Name 5 things you see, 4 you touch, 3 you hear, 2 you smell, 1 you taste\n";
+      supportResponse += "💨 **Box Breathing**: Breathe in 4, hold 4, out 4, hold 4 - repeat\n";
+      supportResponse += "🎯 **Challenge the thought**: What's the actual evidence this will happen?\n";
+      supportResponse += "✨ **Name it**: Say 'I'm experiencing anxiety' not 'I am anxious' - creates distance\n";
+      supportResponse += "💙 **Reach out**: Professional help like therapy (especially CBT) is very effective\n\n";
+      supportResponse += "What's fueling the anxiety right now? Is it something specific or more general? Let's work through this together. 🌊";
+    }
+    
+    // Depression and sadness
+    else if (msg.includes('sad') || msg.includes('depressed') || msg.includes('hopeless') || msg.includes('empty') || 
+             msg.includes('numb') || msg.includes('pointless')) {
+      supportResponse += "**The weight of sadness or depression is so heavy.** When everything feels gray, when you can't remember what joy feels like, when just existing takes all your energy - that's real pain that deserves real support.\n\n";
+      
+      supportResponse += "💙 **What I need you to know:** Depression lies. It tells you things will never get better, that you're worthless, that there's no point. But those are symptoms talking, not truth.\n\n";
+      
+      supportResponse += "**What depression feels like:**\n";
+      supportResponse += "🌑 **Everything is harder** - Tasks that used to be easy now feel impossible\n";
+      supportResponse += "💫 **Numbness or pain** - Sometimes both at the same time\n";
+      supportResponse += "🎯 **Loss of interest** - Things you loved don't bring joy anymore\n";
+      supportResponse += "⚡ **No energy** - Even getting out of bed is exhausting\n";
+      supportResponse += "💭 **Hopelessness** - Can't imagine feeling better\n\n";
+      
+      supportResponse += "**What actually helps:**\n";
+      supportResponse += "💙 **Allow yourself to feel** - Depression isn't weakness, it's illness\n";
+      supportResponse += "🌸 **Tiny steps count** - Drinking water, showering, eating - these all matter\n";
+      supportResponse += "✨ **Be gentle with yourself** - Treat yourself like you'd treat a dear friend\n";
+      supportResponse += "🤗 **Don't isolate** - Even small connections help break through the fog\n";
+      supportResponse += "📞 **Professional help works** - Therapy and/or medication can truly help\n";
+      supportResponse += "🌅 **This can change** - Depression is treatable, even when it feels permanent\n\n";
+      supportResponse += "If you're having thoughts of self-harm or suicide, please reach out to 988 (Suicide & Crisis Lifeline) right now. You deserve support.\n\n";
+      supportResponse += "What do you need most in this moment? Comfort? Understanding? Just someone to sit with you in this? I'm here. 💙";
+    }
+    
+    // General difficult day
+    else {
+      supportResponse += "**Sometimes a day is just hard for reasons that are difficult to put into words.** And that's okay. You don't have to have it all figured out or explained perfectly.\n\n";
+      
+      supportResponse += "**What I want you to remember:**\n";
+      supportResponse += "💙 **Bad days are temporary** - This feeling won't last forever\n";
+      supportResponse += "🌸 **You're doing your best** - Even if it doesn't feel like enough\n";
+      supportResponse += "✨ **Be patient with yourself** - Healing and growth aren't linear\n";
+      supportResponse += "🤗 **Reach out** - You don't have to carry this alone\n";
+      supportResponse += "🌱 **Tomorrow is a new day** - Fresh start, no expectations\n\n";
+      
+      supportResponse += "**Things that might help right now:**\n";
+      supportResponse += "🌊 Take a few deep breaths\n";
+      supportResponse += "💧 Drink some water\n";
+      supportResponse += "🎵 Listen to music that matches your mood\n";
+      supportResponse += "📱 Text a friend\n";
+      supportResponse += "🚶 Go for a short walk\n";
+      supportResponse += "😴 Rest if you need it - it's okay to pause\n\n";
+      supportResponse += "Is there anything else you want to share about what's weighing on you? Or do you just need to know that someone hears you and cares? Because I do. 💛";
+    }
+    
+    return supportResponse;
+  };
+  
+  // Generate neutral response
+  const generateNeutralResponse = (userMessage) => {
+    const msg = userMessage.toLowerCase();
+    
+    if (msg.includes('no') || msg.includes('nothing') || msg.includes('not really')) {
+      return "💙 That's totally okay! Sometimes we're just in a neutral space, and that's completely valid. Not every day has to be dramatic or intense.\n\nI'm here whenever you want to talk about anything - big or small, serious or lighthearted. What feels good for you right now? 🌸";
+    } else {
+      return "💙 I hear you. It sounds like you're processing some things, and I'm here to listen without judgment.\n\nTake your time sharing whatever feels comfortable. There's no pressure to have it all figured out. What matters most to you in what you just shared? 🌸";
+    }
   };
 
   // Handle music button press using backend data
@@ -705,7 +1265,7 @@ What feels like the most manageable first step for you in getting some support?`
       };
       
     } catch (error) {
-      console.error('🚨 Hugging Face Error, falling back to local AI:', error);
+      console.log('⚠️ Hugging Face temporarily unavailable, using local AI:', error.message);
       // Fallback to original system if Hugging Face fails
       return await generateFastKintsugiResponse(message, userMoodData);
     }
@@ -1118,26 +1678,38 @@ What would help you see the strength in having chosen truth, even though it led 
     // Handle simple greetings
     if (msg === 'hi' || msg === 'hello' || msg === 'hey' || msg.startsWith('hh') || msg === 'hhhii') {
       const greetings = [
-        "Hi there! 😊 I'm so glad you're here. What's on your mind today?",
-        "Hello! 💙 It's wonderful to see you. How are you feeling right now?", 
-        "Hey! 🌟 I'm here and ready to listen. What would you like to talk about?",
-        "Hi! ✨ Thanks for reaching out. What's going on in your world today?",
-        "Hello beautiful soul! 🌸 I'm here for whatever you need to share."
+        "Hi there! 😊 I'm so glad you're here. You know, just reaching out and saying hello takes courage sometimes, and I appreciate you taking that step. How are you really feeling today? Not just the surface-level 'fine,' but how is your heart doing? I'm here to listen to whatever you want to share - whether it's something heavy on your mind, or you just need a friendly presence. What brought you here today?",
+        
+        "Hello! 💙 It's wonderful to see you. I want you to know that this is a safe space where you can be completely yourself - no judgment, no expectations, just genuine support and understanding. Sometimes we all need someone who will truly listen. So tell me, what's going on in your world right now? What's weighing on your mind, or what would you like to talk through together?", 
+        
+        "Hey! 🌟 I'm really happy you're here, and I want you to feel comfortable opening up at your own pace. There's no rush - we can talk about whatever feels right for you. Whether you're dealing with something specific, or you just need someone to listen while you process your thoughts and feelings, I'm here for you. What would feel most helpful to explore together right now?",
+        
+        "Hi! ✨ Thank you for reaching out. I can imagine it might have taken some courage to start this conversation, and I want you to know that whatever you're going through, your feelings are completely valid. I'm here to provide a listening ear, genuine support, and a space where you can express yourself freely. So, what's on your heart today? What would you like to talk about?",
+        
+        "Hello beautiful soul! 🌸 I'm here for whatever you need - whether that's working through something difficult, celebrating something good, or just having someone present with you through whatever you're experiencing. Every feeling, every thought, every experience you have matters. This is your time, and I'm giving you my full attention. What feels most important to share right now?"
       ];
       return greetings[Math.floor(Math.random() * greetings.length)];
     }
     
     // Handle simple emotional statements
     if (msg.includes('i am sad') || msg.includes('im sad') || msg.includes('i feel sad')) {
-      return `💙 I can hear that you're feeling sad right now, and I want you to know that I'm here with you in this feeling. Sadness is such a valid and important emotion - it often shows us what matters to us.
+      return `💙 I can hear that you're feeling sad right now, and I want you to know that I'm here with you in this feeling. First, let me say that it takes strength to acknowledge and name your sadness - many people try to push these feelings away or pretend they don't exist, but you're being honest about what you're experiencing, and that's really important.
 
-What's bringing up this sadness for you today? Sometimes just putting words to our feelings can help us understand them better. I'm here to listen with my whole heart. 💛`;
+Sadness is such a valid and meaningful emotion. It's often our heart's way of telling us that something matters to us, that we care deeply about something or someone. It's not a weakness or something to be ashamed of - it's part of being human, part of having a heart that feels things fully.
+
+I want to understand what you're going through better. What's bringing up this sadness for you today? Is it something specific that happened, or is it more of a general heaviness you've been carrying? Sometimes just putting words to our feelings and having someone really listen can help us feel a little less alone with them.
+
+Take your time - there's no rush. I'm here to listen with my whole heart, and whatever you're feeling is important. 💛`;
     }
     
     if (msg.includes('i am happy') || msg.includes('im happy') || msg.includes('i feel good')) {
-      return `🌟 Oh, I love hearing that you're feeling happy! There's something so beautiful about sharing joy with someone else. Your happiness matters, and I'm genuinely glad you're experiencing this positive moment.
+      return `🌟 Oh, I love hearing that you're feeling happy! There's something so beautiful and precious about happiness, and I'm genuinely glad you're experiencing this positive moment. Your joy matters just as much as any other feeling, and it deserves to be celebrated and acknowledged.
 
-What's contributing to this good feeling today? I'd love to celebrate this with you! 💛✨`;
+You know, sometimes we don't take enough time to really savor the good moments - we rush through them or feel like we don't deserve to be happy. But happiness is just as valid and important as any other emotion, and it's wonderful that you're recognizing and sharing it.
+
+I'd love to hear more about what's contributing to this good feeling today. What's happening in your life that's bringing you joy? Is it something specific that happened, a realization you had, or just a general sense of things feeling right? Sometimes sharing our happiness with someone else can amplify it and help us hold onto that feeling a little longer.
+
+I'm here to celebrate this with you! Tell me what's making your heart light today. 💛✨`;
     }
     
     if (msg.includes('i am angry') || msg.includes('im angry') || msg.includes('i feel angry')) {
@@ -1927,14 +2499,22 @@ What feels most important for you to talk about right now? I'm here to listen an
     );
 
     const userMessage = messages[0].text;
+    const msg = userMessage.toLowerCase().trim();
     setIsLoading(true);
     
+    // If in check-in mode, process the response through check-in flow
+    if (checkInMode) {
+      setIsLoading(false);
+      processCheckInResponse(userMessage);
+      return;
+    }
+    
     try {
-      // Use local AI system (works perfectly without external dependencies)
-      const responsePromise = generateFastKintsugiResponse(userMessage, userMoodData);
+      // Try advanced Hugging Face first for better, more natural responses
+      const responsePromise = generateAdvancedKintsugiResponse(userMessage, userMoodData);
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Response timeout')), 8000) // 8 second timeout
+        setTimeout(() => reject(new Error('Response timeout')), 10000) // 10 second timeout for API
       );
       
       const response = await Promise.race([responsePromise, timeoutPromise]);
@@ -1987,7 +2567,7 @@ What feels most important for you to talk about right now? I'm here to listen an
       }, 200); // Ultra fast response
       
     } catch (error) {
-      console.error("⚠️ Response generation failed:", error);
+      console.log("⚠️ Response generation encountered an issue:", error.message);
       
       // Quick fallback response
       let fallbackText = "💙 I'm here with you. ";
@@ -2016,7 +2596,7 @@ What feels most important for you to talk about right now? I'm here to listen an
     } finally {
       setIsLoading(false);
     }
-  }, [userMoodData]);
+  }, [userMoodData, checkInMode, currentCheckInStep, checkInData]);
 
   const renderBubble = (props) => {
     return (
@@ -2024,28 +2604,42 @@ What feels most important for you to talk about right now? I'm here to listen an
         {...props}
         wrapperStyle={{
           right: {
-            backgroundColor: '#D4A574',
-            borderRadius: 20,
-            marginVertical: 2,
+            backgroundColor: '#FF6B9D', // Beautiful pink gradient
+            borderRadius: 18,
+            marginVertical: 4,
+            paddingHorizontal: 4,
+            shadowColor: '#FF6B9D',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+            elevation: 3,
           },
           left: {
-            backgroundColor: '#F8F9FA',
-            borderRadius: 20,
-            marginVertical: 2,
-            borderWidth: 1,
-            borderColor: '#E9ECEF',
+            backgroundColor: '#FFFFFF',
+            borderRadius: 18,
+            marginVertical: 4,
+            paddingHorizontal: 4,
+            borderWidth: 1.5,
+            borderColor: '#E8E8E8',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            elevation: 2,
           },
         }}
         textStyle={{
           right: {
             color: '#FFFFFF',
-            fontSize: 16,
+            fontSize: 15,
             lineHeight: 22,
+            fontWeight: '400',
           },
           left: {
-            color: '#2C3E50',
-            fontSize: 16,
+            color: '#1A1A1A',
+            fontSize: 15,
             lineHeight: 22,
+            fontWeight: '400',
           },
         }}
       />
@@ -2088,17 +2682,18 @@ What feels most important for you to talk about right now? I'm here to listen an
         minInputToolbarHeight={60}
         textInputProps={{
           style: {
-            color: '#2C3E50',
+            color: '#000000',
             fontSize: 16,
-            lineHeight: 20,
-            marginHorizontal: 8,
-            marginTop: 8,
-            marginBottom: 8,
-            maxHeight: 100, // Limit input height
+            lineHeight: 22,
+            paddingTop: 0,
+            paddingBottom: 0,
+            marginTop: 0,
+            marginBottom: 0,
           },
           multiline: true,
-          maxLength: 500, // Prevent extremely long messages
+          maxLength: 500,
           blurOnSubmit: false,
+          autoCorrect: true,
         }}
         renderComposer={(props) => (
           <View style={styles.composerContainer}>
@@ -2154,27 +2749,27 @@ What feels most important for you to talk about right now? I'm here to listen an
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEFEFE', // Very soft white background
+    backgroundColor: '#F8F9FA', // Soft, calming background
   },
   musicButtonContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#FF6B9D',
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 4,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#FF6B9D',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 3,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 6,
   },
   musicButton: {
     flex: 1,
@@ -2200,24 +2795,28 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#FFFFFF', // White background so text is visible
-    borderRadius: 20,
-    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1.5,
     borderColor: '#E0E0E0',
-    minHeight: 44,
-    maxHeight: 100,
+    minHeight: 48,
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   textInput: {
     flex: 1,
-    color: '#2C3E50', // Dark text
-    backgroundColor: 'transparent',
+    color: '#000000',
+    backgroundColor: '#FFFFFF',
     fontSize: 16,
-    lineHeight: 20,
-    margin: 0,
-    padding: 4,
-    textAlignVertical: 'top',
-    minHeight: 20,
+    lineHeight: 22,
+    paddingTop: 4,
+    paddingBottom: 4,
+    paddingHorizontal: 8,
+    minHeight: 40,
   },
   sendContainer: {
     justifyContent: 'center',
@@ -2226,34 +2825,35 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   sendButton: {
-    backgroundColor: '#FF6B6B', // Kintsugi red/pink color
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-    minWidth: 60,
+    backgroundColor: '#FF6B9D', // Beautiful pink color matching theme
+    paddingHorizontal: 24,
+    paddingVertical: 13,
+    borderRadius: 24,
+    minWidth: 70,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#FF6B9D',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOpacity: 0.3,
+    shadowRadius: 3.84,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#D3D3D3',
     elevation: 0,
     shadowOpacity: 0,
   },
   sendButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   sendButtonTextDisabled: {
-    color: '#AAAAAA',
+    color: '#999999',
   },
 });
 

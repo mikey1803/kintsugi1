@@ -34,7 +34,7 @@ vercel --prod
 3. Go to Settings → Environment Variables
 4. Add:
    - **Name**: `HUGGING_FACE_TOKEN`
-   - **Value**: `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`
+   - **Value**: `your_huggingface_token_here`
    - **Environment**: All (Production, Preview, Development)
 
 ### **Step 3: Update API URL in Your App**
